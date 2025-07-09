@@ -29,24 +29,32 @@ def process_codes(codes):
 
     for parts in split_codes:
         current_level = tree
-        for i, part in enumerate(parts):
-            prefix = '-'.join(parts[:i]) + '-' if i > 0 else ''
-            full_part = prefix + part
-            if full_part not in current_level:
-                current_level[full_part] = defaultdict(dict)
-            current_level = current_level[full_part]
+        for i in range(len(parts)):
+            # Для каждого уровня берем только соответствующую часть кода
+            level_part = parts[i]
+            if level_part not in current_level:
+                current_level[level_part] = defaultdict(dict)
+            current_level = current_level[level_part]
 
     return tree
 
 
-def print_tree(node, level=0, result=None):
+def print_tree(node, level=0, prefix="", result=None):
     if result is None:
         result = []
 
-    for key, child in sorted(node.items()):
-        indent = '-' * level
-        result.append(f"{indent}{key} (уровень {level + 1})")
-        print_tree(child, level + 1, result)
+    for part, child in sorted(node.items()):
+        # Формируем отступы в зависимости от уровня
+        indent = '  ' * level
+        # Для уровня 1 выводим полностью первую часть (например "ФЕРм")
+        if level == 0:
+            display_part = part
+        else:
+            # Для остальных уровней выводим только текущую часть
+            display_part = part.split('-')[-1] if '-' in part else part
+
+        result.append(f"{indent}{display_part} (уровень {level + 1})")
+        print_tree(child, level + 1, f"{prefix}-{part}" if prefix else part, result)
 
     return result
 
@@ -68,7 +76,7 @@ def main():
         result_window = tk.Tk()
         result_window.title("Результат группировки кодов")
 
-        text = tk.Text(result_window, wrap=tk.WORD, width=80, height=30)
+        text = tk.Text(result_window, wrap=tk.WORD, width=60, height=30)
         scroll = tk.Scrollbar(result_window, command=text.yview)
         text.configure(yscrollcommand=scroll.set)
 
