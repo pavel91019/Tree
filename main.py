@@ -1,96 +1,138 @@
 import pandas as pd
 from collections import defaultdict
 import tkinter as tk
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, ttk
 
 
-def select_excel_file():
-    root = tk.Tk()
-    root.withdraw()  # Скрываем основное окно
+class CodeProcessorApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Анализатор кодов ФЕР")
+        self.root.geometry("800x600")
 
-    file_path = filedialog.askopenfilename(
-        title="Выберите Excel файл с кодами",
-        filetypes=[("Excel files", "*.xlsx *.xls"), ("All files", "*.*")]
-    )
+        self.max_level = tk.IntVar(value=3)  # Значение по умолчанию
+        self.file_path = None
 
-    if not file_path:
-        messagebox.showinfo("Информация", "Файл не выбран!")
-        return None
+        self.create_widgets()
 
-    return file_path
+    def create_widgets(self):
+        # Фрейм для настроек
+        settings_frame = ttk.LabelFrame(self.root, text="Настройки", padding=10)
+        settings_frame.pack(fill=tk.X, padx=5, pady=5)
 
+        # Поле для выбора максимального уровня
+        ttk.Label(settings_frame, text="Максимальный уровень:").grid(row=0, column=0, sticky=tk.W)
+        self.level_spinbox = ttk.Spinbox(
+            settings_frame,
+            from_=1,
+            to=10,
+            textvariable=self.max_level,
+            width=5
+        )
+        self.level_spinbox.grid(row=0, column=1, sticky=tk.W, padx=5)
 
-def process_codes(codes):
-    # Разбиваем коды на части по дефисам
-    split_codes = [code.split('-') for code in codes]
+        # Кнопка выбора файла
+        self.file_btn = ttk.Button(
+            settings_frame,
+            text="Выбрать файл Excel",
+            command=self.select_file
+        )
+        self.file_btn.grid(row=1, column=0, columnspan=2, pady=5)
 
-    # Строим дерево
-    tree = defaultdict(dict)
+        # Кнопка обработки
+        self.process_btn = ttk.Button(
+            settings_frame,
+            text="Обработать коды",
+            command=self.process_codes,
+            state=tk.DISABLED
+        )
+        self.process_btn.grid(row=2, column=0, columnspan=2, pady=5)
 
-    for parts in split_codes:
-        current_level = tree
-        for i in range(len(parts)):
-            # Для каждого уровня берем только соответствующую часть кода
-            level_part = parts[i]
-            if level_part not in current_level:
-                current_level[level_part] = defaultdict(dict)
-            current_level = current_level[level_part]
+        # Фрейм для результатов
+        result_frame = ttk.LabelFrame(self.root, text="Результаты", padding=10)
+        result_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
-    return tree
+        # Текстовое поле с прокруткой
+        self.result_text = tk.Text(result_frame, wrap=tk.WORD)
+        scrollbar = ttk.Scrollbar(result_frame, command=self.result_text.yview)
+        self.result_text.configure(yscrollcommand=scrollbar.set)
 
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.result_text.pack(fill=tk.BOTH, expand=True)
 
-def print_tree(node, level=0, prefix="", result=None):
-    if result is None:
-        result = []
+    def select_file(self):
+        self.file_path = filedialog.askopenfilename(
+            title="Выберите Excel файл с кодами",
+            filetypes=[("Excel files", "*.xlsx *.xls"), ("All files", "*.*")]
+        )
 
-    for part, child in sorted(node.items()):
-        # Формируем отступы в зависимости от уровня
-        indent = '  ' * level
-        # Для уровня 1 выводим полностью первую часть (например "ФЕРм")
-        if level == 0:
-            display_part = part
+        if self.file_path:
+            self.process_btn.config(state=tk.NORMAL)
+            # подстверждение замедляет работу
+           # messagebox.showinfo("Информация", f"Выбран файл:\n{self.file_path}")
         else:
-            # Для остальных уровней выводим только текущую часть
-            display_part = part.split('-')[-1] if '-' in part else part
+            self.process_btn.config(state=tk.DISABLED)
 
-        result.append(f"{indent}{display_part} (уровень {level + 1})")
-        print_tree(child, level + 1, f"{prefix}-{part}" if prefix else part, result)
+    def process_codes(self):
+        if not self.file_path:
+            messagebox.showwarning("Предупреждение", "Сначала выберите файл!")
+            return
 
-    return result
+        try:
+            # Загрузка данных из Excel
+            df = pd.read_excel(self.file_path, header=None)
+            codes = df[0].astype(str).str.strip().tolist()
 
+            # Обработка кодов
+            tree = self.build_tree(codes)
 
-def main():
-    file_path = select_excel_file()
-    if not file_path:
-        return
+            # Очистка предыдущих результатов
+            self.result_text.delete(1.0, tk.END)
 
-    try:
-        # Загрузка данных из Excel (предполагаем, что данные в первом столбце)
-        df = pd.read_excel(file_path, header=None)
-        codes = df[0].astype(str).tolist()
+            # Вывод результатов
+            self.print_tree_to_widget(tree)
 
-        tree = process_codes(codes)
-        result = print_tree(tree)
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Произошла ошибка:\n{str(e)}")
 
-        # Создаем окно для отображения результатов
-        result_window = tk.Tk()
-        result_window.title("Результат группировки кодов")
+    def build_tree(self, codes):
+        tree = defaultdict(dict)
+        max_level = self.max_level.get()
 
-        text = tk.Text(result_window, wrap=tk.WORD, width=60, height=30)
-        scroll = tk.Scrollbar(result_window, command=text.yview)
-        text.configure(yscrollcommand=scroll.set)
+        for code in codes:
+            parts = code.split('-')
+            current_level = tree
 
-        scroll.pack(side=tk.RIGHT, fill=tk.Y)
-        text.pack(fill=tk.BOTH, expand=True)
+            for i in range(min(len(parts), max_level)):
+                part = parts[i]
+                if part not in current_level:
+                    current_level[part] = defaultdict(dict)
+                current_level = current_level[part]
 
-        text.insert(tk.END, "\n".join(result))
-        text.config(state=tk.DISABLED)
+        return tree
 
-        result_window.mainloop()
+    def print_tree_to_widget(self, node, level=0, prefix=""):
+        for part, child in sorted(node.items()):
+            # Определяем отступы
+            indent = '\t' * level
 
-    except Exception as e:
-        messagebox.showerror("Ошибка", f"Произошла ошибка при обработке файла:\n{str(e)}")
+            # Формируем отображаемую часть
+            if level == 0:
+                display_part = part
+            else:
+                display_part = part.split('-')[-1] if '-' in part else part
+
+            # Добавляем в текстовое поле
+            #self.result_text.insert(tk.END, f"{indent}{display_part} (уровень {level + 1})\n")
+            self.result_text.insert(tk.END, f"{indent}{display_part} (ур {level + 1})\n")
+            # Рекурсивно обрабатываем дочерние элементы
+            self.print_tree_to_widget(child, level + 1, f"{prefix}-{part}" if prefix else part)
+
+        # Автоматическая прокрутка в начало
+        self.result_text.see(tk.END)
 
 
 if __name__ == "__main__":
-    main()
+    root = tk.Tk()
+    app = CodeProcessorApp(root)
+    root.mainloop()
