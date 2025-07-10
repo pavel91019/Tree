@@ -68,8 +68,6 @@ class CodeProcessorApp:
 
         if self.file_path:
             self.process_btn.config(state=tk.NORMAL)
-            # подстверждение замедляет работу
-           # messagebox.showinfo("Информация", f"Выбран файл:\n{self.file_path}")
         else:
             self.process_btn.config(state=tk.DISABLED)
 
@@ -81,10 +79,20 @@ class CodeProcessorApp:
         try:
             # Загрузка данных из Excel
             df = pd.read_excel(self.file_path, header=None)
-            codes = df[0].astype(str).str.strip().tolist()
+
+            # Собираем все коды из всех ячеек
+            all_codes = []
+            for cell in df[0]:
+                # Обрабатываем каждую ячейку - разбиваем по переносам строк
+                if pd.notna(cell):
+                    codes_in_cell = str(cell).split('\n')
+                    for code in codes_in_cell:
+                        code = code.strip()
+                        if code:  # Игнорируем пустые строки
+                            all_codes.append(code)
 
             # Обработка кодов
-            tree = self.build_tree(codes)
+            tree = self.build_tree(all_codes)
 
             # Очистка предыдущих результатов
             self.result_text.delete(1.0, tk.END)
@@ -104,7 +112,7 @@ class CodeProcessorApp:
             current_level = tree
 
             for i in range(min(len(parts), max_level)):
-                part = parts[i]
+                part = parts[i].strip()  # Удаляем лишние пробелы
                 if part not in current_level:
                     current_level[part] = defaultdict(dict)
                 current_level = current_level[part]
@@ -114,7 +122,7 @@ class CodeProcessorApp:
     def print_tree_to_widget(self, node, level=0, prefix=""):
         for part, child in sorted(node.items()):
             # Определяем отступы
-            indent = '\t' * level
+            indent = '    ' * level  # Используем 4 пробела для каждого уровня
 
             # Формируем отображаемую часть
             if level == 0:
@@ -123,8 +131,8 @@ class CodeProcessorApp:
                 display_part = part.split('-')[-1] if '-' in part else part
 
             # Добавляем в текстовое поле
-            #self.result_text.insert(tk.END, f"{indent}{display_part} (уровень {level + 1})\n")
             self.result_text.insert(tk.END, f"{indent}{display_part} (ур {level + 1})\n")
+
             # Рекурсивно обрабатываем дочерние элементы
             self.print_tree_to_widget(child, level + 1, f"{prefix}-{part}" if prefix else part)
 
