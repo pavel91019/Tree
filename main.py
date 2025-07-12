@@ -7,124 +7,94 @@ from tkinter import filedialog, messagebox, ttk
 class CodeProcessorApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Анализатор кодов ФЕР с чекбоксами")
-        self.root.geometry("1000x800")
-
-        # Состояния чекбоксов {item_id: checked}
-        self.checked_items = {}
+        self.root.title("Анализатор кодов ФЕР")
+        self.root.geometry("800x600")
 
         self.current_level = tk.IntVar(value=3)
         self.file_path = None
+        self.colored_items = set()  # Множество для хранения окрашенных элементов
 
         self.create_widgets()
         self.setup_styles()
 
     def setup_styles(self):
-        self.style = ttk.Style()
-        self.style.configure("Treeview", rowheight=25)
-        self.style.map("Treeview.Heading", background=[('active', '#e6e6e6')])
+        def setup_styles(self):
+            self.style = ttk.Style()
+            # Настраиваем стиль для элементов с тегом 'green'
+            self.style.configure("Treeview", background="white")
+            self.style.map("Treeview",
+                           background=[('selected', '#347083')])  # Цвет выделения
+            self.style.configure("Treeview.green", background="#e6ffe6")
+            self.style.map("Treeview.green",
+                           background=[('selected', '#88cce6')])  # Цвет выделения для зеленых элементов
 
     def create_widgets(self):
-        # Main frames
-        main_frame = ttk.Frame(self.root)
-        main_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-
-        # Settings frame
-        settings_frame = ttk.LabelFrame(main_frame, text="Настройки", padding=10)
+        # Фрейм для настроек
+        settings_frame = ttk.LabelFrame(self.root, text="Настройки", padding=10)
         settings_frame.pack(fill=tk.X, padx=5, pady=5)
 
-        # Level control
+        # Поле для текущего уровня
         level_frame = ttk.Frame(settings_frame)
         level_frame.pack(fill=tk.X, pady=5)
 
-        ttk.Label(level_frame, text="Уровень детализации:").pack(side=tk.LEFT)
-        ttk.Label(level_frame, textvariable=self.current_level, width=2).pack(side=tk.LEFT, padx=5)
+        ttk.Label(level_frame, text="Текущий уровень:").pack(side=tk.LEFT)
 
+        self.level_label = ttk.Label(level_frame, textvariable=self.current_level, width=3)
+        self.level_label.pack(side=tk.LEFT, padx=5)
+
+        # Кнопки управления уровнем
         ttk.Button(
             level_frame,
-            text="↑",
-            command=lambda: self.change_level(1),
-            width=3
+            text="↑ Увеличить",
+            command=lambda: self.change_level(1)
         ).pack(side=tk.LEFT, padx=2)
 
         ttk.Button(
             level_frame,
-            text="↓",
-            command=lambda: self.change_level(-1),
-            width=3
+            text="↓ Уменьшить",
+            command=lambda: self.change_level(-1)
         ).pack(side=tk.LEFT, padx=2)
 
-        # File buttons
-        btn_frame = ttk.Frame(settings_frame)
-        btn_frame.pack(fill=tk.X, pady=5)
-
-        ttk.Button(
-            btn_frame,
-            text="Выбрать файл",
+        # Кнопка выбора файла
+        self.file_btn = ttk.Button(
+            settings_frame,
+            text="Выбрать файл Excel",
             command=self.select_file
-        ).pack(side=tk.LEFT, padx=2)
-
-        ttk.Button(
-            btn_frame,
-            text="Сохранить отметки",
-            command=self.save_checks
-        ).pack(side=tk.LEFT, padx=2)
-
-        ttk.Button(
-            btn_frame,
-            text="Загрузить отметки",
-            command=self.load_checks
-        ).pack(side=tk.LEFT, padx=2)
-
-        # Treeview frame
-        tree_frame = ttk.Frame(main_frame)
-        tree_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-
-        # Treeview with checkboxes
-        self.tree = ttk.Treeview(
-            tree_frame,
-            columns=("check", "item"),
-            show="tree headings",
-            selectmode="extended"
         )
+        self.file_btn.pack(fill=tk.X, pady=5)
 
-        # Configure columns
-        self.tree.column("#0", width=0, stretch=tk.NO)  # Hide first empty column
-        self.tree.column("check", width=40, anchor="center")
-        self.tree.column("item", width=900, anchor="w")
+        # Кнопка раскрашивания/снятия цвета
+        self.color_btn = ttk.Button(
+            settings_frame,
+            text="Переключить цвет выделенного",
+            command=self.toggle_color_selected
+        )
+        self.color_btn.pack(fill=tk.X, pady=5)
 
-        # Headings
-        self.tree.heading("check", text="✓", command=self.toggle_all)
-        self.tree.heading("item", text="Код")
+        # Фрейм для результатов
+        result_frame = ttk.LabelFrame(self.root, text="Результаты", padding=10)
+        result_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
-        # Scrollbars
-        vsb = ttk.Scrollbar(tree_frame, orient="vertical", command=self.tree.yview)
-        hsb = ttk.Scrollbar(tree_frame, orient="horizontal", command=self.tree.xview)
-        self.tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+        # Treeview с прокруткой
+        self.tree = ttk.Treeview(result_frame, show="tree", selectmode="extended")
+        self.tree.tag_configure('green', background='#e6ffe6')  # Конфигурация тега
+        scrollbar = ttk.Scrollbar(result_frame, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=scrollbar.set)
 
-        self.tree.grid(row=0, column=0, sticky="nsew")
-        vsb.grid(row=0, column=1, sticky="ns")
-        hsb.grid(row=1, column=0, sticky="ew")
-        tree_frame.grid_rowconfigure(0, weight=1)
-        tree_frame.grid_columnconfigure(0, weight=1)
-
-        # Bind events
-        self.tree.bind("<Button-1>", self.on_click)
-        self.tree.bind("<space>", self.toggle_selected)
-
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.tree.pack(fill=tk.BOTH, expand=True)
     def select_file(self):
         self.file_path = filedialog.askopenfilename(
+            title="Выберите Excel файл с кодами",
             filetypes=[("Excel files", "*.xlsx *.xls"), ("All files", "*.*")]
         )
 
-        if self.file_path:
-            self.process_file()
-
-    def process_file(self):
         try:
+            # Загрузка данных из Excel
             df = pd.read_excel(self.file_path, header=None)
-            all_codes = []
 
+            # Собираем все коды
+            all_codes = []
             for cell in df[0]:
                 if pd.notna(cell):
                     codes_in_cell = str(cell).split('\n')
@@ -133,57 +103,39 @@ class CodeProcessorApp:
                         if code:
                             all_codes.append(code)
 
+            # Очистка дерева и сброс цветов
+            for item in self.tree.get_children():
+                self.tree.delete(item)
+            self.colored_items.clear()
+
+            # Построение дерева
             self.build_tree(all_codes)
+            self.update_tree_display()
 
         except Exception as e:
-            messagebox.showerror("Ошибка", f"Ошибка обработки файла:\n{str(e)}")
+            messagebox.showerror("Ошибка", f"Произошла ошибка:\n{str(e)}")
 
     def build_tree(self, codes):
-        # Clear existing tree
-        for item in self.tree.get_children():
-            self.tree.delete(item)
-
-        self.checked_items.clear()
-
-        # Build tree structure
         tree_dict = defaultdict(dict)
+
         for code in codes:
             parts = code.split('-')
-            current = tree_dict
+            current_level = tree_dict
+
             for part in parts:
                 part = part.strip()
-                if part not in current:
-                    current[part] = defaultdict(dict)
-                current = current[part]
+                if part not in current_level:
+                    current_level[part] = defaultdict(dict)
+                current_level = current_level[part]
 
-        # Add items to treeview
+        # Добавление в Treeview
         self.add_tree_items("", tree_dict, level=1)
-        self.update_tree_display()
 
     def add_tree_items(self, parent, node, level):
         for part, child in sorted(node.items()):
-            item_id = self.tree.insert(
-                parent,
-                "end",
-                values=("☐", part),
-                tags=(f"level{level}",)
-            )
-
+            item = self.tree.insert(parent, "end", text=part, open=False)
             if child:
-                self.add_tree_items(item_id, child, level + 1)
-
-    def update_tree_display(self):
-        target_level = self.current_level.get()
-
-        def set_visibility(item, level):
-            visible = level <= target_level
-            self.tree.item(item, open=level < target_level)
-
-            for child in self.tree.get_children(item):
-                set_visibility(child, level + 1)
-
-        for item in self.tree.get_children():
-            set_visibility(item, 1)
+                self.add_tree_items(item, child, level + 1)
 
     def change_level(self, delta):
         new_level = self.current_level.get() + delta
@@ -191,125 +143,41 @@ class CodeProcessorApp:
             self.current_level.set(new_level)
             self.update_tree_display()
 
-    def on_click(self, event):
-        region = self.tree.identify("region", event.x, event.y)
-        column = self.tree.identify_column(event.x)
+    def update_tree_display(self):
+        target_level = self.current_level.get()
 
-        if region == "cell" and column == "#1":  # Checkbox column
-            item = self.tree.identify_row(event.y)
-            self.toggle_item(item)
+        def set_item_state(item, level):
+            is_open = level < target_level
+            self.tree.item(item, open=is_open)
 
-    def toggle_item(self, item):
-        current = self.tree.item(item, "values")[0]
-        new_state = "☑" if current == "☐" else "☐"
-        self.tree.item(item, values=(new_state, item.split("-")[-1]))
+            # Сохраняем цвет при обновлении отображения
+            if item in self.colored_items:
+                self.tree.item(item, tags=("green",))
+            else:
+                self.tree.item(item, tags=())
 
-        # Update checked items dictionary
-        self.checked_items[item] = (new_state == "☑")
-
-        # Update parent states if needed
-        self.update_parent_states(item)
-
-    def toggle_selected(self, event):
-        for item in self.tree.selection():
-            self.toggle_item(item)
-
-    def toggle_all(self):
-        all_checked = all(
-            self.tree.item(item, "values")[0] == "☑"
-            for item in self.tree.get_children()
-        )
-
-        new_state = "☐" if all_checked else "☑"
-
-        def set_state(item):
-            self.tree.item(item, values=(new_state, self.tree.item(item, "values")[1]))
-            self.checked_items[item] = (new_state == "☑")
             for child in self.tree.get_children(item):
-                set_state(child)
+                set_item_state(child, level + 1)
 
         for item in self.tree.get_children():
-            set_state(item)
+            set_item_state(item, 1)
 
-    def update_parent_states(self, child_item):
-        parent = self.tree.parent(child_item)
-        if not parent:
+    def toggle_color_selected(self):
+        """Переключает цвет выделенных элементов"""
+        selected_items = self.tree.selection()
+        if not selected_items:
+            messagebox.showwarning("Внимание", "Не выбрано ни одного элемента")
             return
 
-        children = self.tree.get_children(parent)
-        if not children:
-            return
-
-        # Check if all siblings are checked
-        all_checked = all(
-            self.tree.item(item, "values")[0] == "☑"
-            for item in children
-        )
-
-        # Check if any sibling is checked
-        any_checked = any(
-            self.tree.item(item, "values")[0] == "☑"
-            for item in children
-        )
-
-        current_parent_value = self.tree.item(parent, "values")[0]
-
-        if all_checked and current_parent_value != "☑":
-            self.tree.item(parent, values=("☑", self.tree.item(parent, "values")[1]))
-            self.checked_items[parent] = True
-            self.update_parent_states(parent)
-        elif not all_checked and any_checked and current_parent_value != "◐":
-            self.tree.item(parent, values=("◐", self.tree.item(parent, "values")[1]))
-            self.checked_items[parent] = None
-            self.update_parent_states(parent)
-        elif not any_checked and current_parent_value != "☐":
-            self.tree.item(parent, values=("☐", self.tree.item(parent, "values")[1]))
-            self.checked_items[parent] = False
-            self.update_parent_states(parent)
-
-    def save_checks(self):
-        if not self.checked_items:
-            messagebox.showinfo("Информация", "Нет отметок для сохранения")
-            return
-
-        file_path = filedialog.asksaveasfilename(
-            defaultextension=".json",
-            filetypes=[("JSON files", "*.json"), ("All files", "*.*")]
-        )
-
-        if file_path:
-            import json
-            with open(file_path, "w") as f:
-                json.dump(self.checked_items, f)
-            messagebox.showinfo("Успех", "Отметки сохранены")
-
-    def load_checks(self):
-        file_path = filedialog.askopenfilename(
-            filetypes=[("JSON files", "*.json"), ("All files", "*.*")]
-        )
-
-        if file_path:
-            import json
-            try:
-                with open(file_path, "r") as f:
-                    checks = json.load(f)
-
-                for item in self.tree.get_children(""):
-                    self.apply_checks(item, checks)
-
-                messagebox.showinfo("Успех", "Отметки загружены")
-            except Exception as e:
-                messagebox.showerror("Ошибка", f"Ошибка загрузки:\n{str(e)}")
-
-    def apply_checks(self, parent, checks):
-        if parent in checks:
-            state = "☑" if checks[parent] else "☐"
-            self.tree.item(parent, values=(state, self.tree.item(parent, "values")[1]))
-            self.checked_items[parent] = checks[parent]
-
-        for child in self.tree.get_children(parent):
-            self.apply_checks(child, checks)
-
+        for item in selected_items:
+            if item in self.colored_items:
+                # Если элемент уже окрашен - убираем цвет
+                self.colored_items.remove(item)
+                self.tree.item(item, tags=())  # Удаляем тег
+            else:
+                # Если элемент не окрашен - добавляем цвет
+                self.colored_items.add(item)
+                self.tree.item(item, tags=('green',))  # Применяем тег
 
 if __name__ == "__main__":
     root = tk.Tk()
