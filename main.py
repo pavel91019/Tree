@@ -10,8 +10,7 @@ class CodeProcessorApp:
         self.root.title("Анализатор кодов ФЕР")
         self.root.geometry("800x600")
 
-        self.max_level = tk.IntVar(value=4)  # Макс. уровень анализа
-        self.min_collapse_level = tk.IntVar(value=3)  # Мин. уровень для свёртки (новое поле)
+        self.current_level = tk.IntVar(value=3)  # Текущий уровень отображения
         self.file_path = None
 
         self.create_widgets()
@@ -21,27 +20,27 @@ class CodeProcessorApp:
         settings_frame = ttk.LabelFrame(self.root, text="Настройки", padding=10)
         settings_frame.pack(fill=tk.X, padx=5, pady=5)
 
-        # Поле для максимального уровня
-        ttk.Label(settings_frame, text="Максимальный уровень:").grid(row=0, column=0, sticky=tk.W)
-        self.level_spinbox = ttk.Spinbox(
-            settings_frame,
-            from_=1,
-            to=10,
-            textvariable=self.max_level,
-            width=5
-        )
-        self.level_spinbox.grid(row=0, column=1, sticky=tk.W, padx=5)
+        # Поле для текущего уровня
+        level_frame = ttk.Frame(settings_frame)
+        level_frame.pack(fill=tk.X, pady=5)
 
-        # Поле для минимального уровня свёртки (НОВОЕ)
-        ttk.Label(settings_frame, text="Мин. уровень свёртки:").grid(row=1, column=0, sticky=tk.W)
-        self.min_level_spinbox = ttk.Spinbox(
-            settings_frame,
-            from_=1,
-            to=10,
-            textvariable=self.min_collapse_level,
-            width=5
-        )
-        self.min_level_spinbox.grid(row=1, column=1, sticky=tk.W, padx=5)
+        ttk.Label(level_frame, text="Текущий уровень:").pack(side=tk.LEFT)
+
+        self.level_label = ttk.Label(level_frame, textvariable=self.current_level, width=3)
+        self.level_label.pack(side=tk.LEFT, padx=5)
+
+        # Кнопки управления уровнем
+        ttk.Button(
+            level_frame,
+            text="↑ Увеличить",
+            command=lambda: self.change_level(1)
+        ).pack(side=tk.LEFT, padx=2)
+
+        ttk.Button(
+            level_frame,
+            text="↓ Уменьшить",
+            command=lambda: self.change_level(-1)
+        ).pack(side=tk.LEFT, padx=2)
 
         # Кнопка выбора файла
         self.file_btn = ttk.Button(
@@ -49,7 +48,7 @@ class CodeProcessorApp:
             text="Выбрать файл Excel",
             command=self.select_file
         )
-        self.file_btn.grid(row=2, column=0, columnspan=2, pady=5)
+        self.file_btn.pack(fill=tk.X, pady=5)
 
         # Кнопка обработки
         self.process_btn = ttk.Button(
@@ -58,23 +57,7 @@ class CodeProcessorApp:
             command=self.process_codes,
             state=tk.DISABLED
         )
-        self.process_btn.grid(row=3, column=0, columnspan=2, pady=5)
-
-        # Кнопки управления деревом
-        control_frame = ttk.Frame(settings_frame)
-        control_frame.grid(row=4, column=0, columnspan=2, pady=5)
-
-        ttk.Button(
-            control_frame,
-            text="Развернуть все",
-            command=self.expand_all
-        ).pack(side=tk.LEFT, padx=2)
-
-        ttk.Button(
-            control_frame,
-            text="Свернуть все",
-            command=self.collapse_all
-        ).pack(side=tk.LEFT, padx=2)
+        self.process_btn.pack(fill=tk.X, pady=5)
 
         # Фрейм для результатов
         result_frame = ttk.LabelFrame(self.root, text="Результаты", padding=10)
@@ -124,20 +107,20 @@ class CodeProcessorApp:
 
             # Построение дерева
             self.build_tree(all_codes)
+            self.update_tree_display()
 
         except Exception as e:
             messagebox.showerror("Ошибка", f"Произошла ошибка:\n{str(e)}")
 
     def build_tree(self, codes):
         tree_dict = defaultdict(dict)
-        max_level = self.max_level.get()
 
         for code in codes:
             parts = code.split('-')
             current_level = tree_dict
 
-            for i in range(min(len(parts), max_level)):
-                part = parts[i].strip()
+            for part in parts:
+                part = part.strip()
                 if part not in current_level:
                     current_level[part] = defaultdict(dict)
                 current_level = current_level[part]
@@ -147,29 +130,31 @@ class CodeProcessorApp:
 
     def add_tree_items(self, parent, node, level):
         for part, child in sorted(node.items()):
-            item = self.tree.insert(parent, "end", text=part, open=level < self.min_collapse_level.get())
+            item = self.tree.insert(parent, "end", text=part, open=False)
             if child:
                 self.add_tree_items(item, child, level + 1)
 
-    def expand_all(self):
+    def change_level(self, delta):
+        new_level = self.current_level.get() + delta
+        if 1 <= new_level <= 10:  # Ограничиваем диапазон 1-10
+            self.current_level.set(new_level)
+            self.update_tree_display()
+
+    def update_tree_display(self):
+        target_level = self.current_level.get()
+
+        def set_item_state(item, level):
+            # Устанавливаем состояние узла (open/closed) в зависимости от уровня
+            is_open = level < target_level
+            self.tree.item(item, open=is_open)
+
+            # Рекурсивно обрабатываем дочерние элементы
+            for child in self.tree.get_children(item):
+                set_item_state(child, level + 1)
+
+        # Применяем ко всем корневым элементам
         for item in self.tree.get_children():
-            self.expand_item_and_children(item, level=1)
-
-    def expand_item_and_children(self, item, level):
-        if level >= self.min_collapse_level.get():
-            self.tree.item(item, open=True)
-        for child in self.tree.get_children(item):
-            self.expand_item_and_children(child, level + 1)
-
-    def collapse_all(self):
-        for item in self.tree.get_children():
-            self.collapse_item_and_children(item, level=1)
-
-    def collapse_item_and_children(self, item, level):
-        if level >= self.min_collapse_level.get():
-            self.tree.item(item, open=False)
-        for child in self.tree.get_children(item):
-            self.collapse_item_and_children(child, level + 1)
+            set_item_state(item, 1)
 
 
 if __name__ == "__main__":
