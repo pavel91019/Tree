@@ -50,15 +50,6 @@ class CodeProcessorApp:
         )
         self.file_btn.pack(fill=tk.X, pady=5)
 
-        # Кнопка обработки
-        self.process_btn = ttk.Button(
-            settings_frame,
-            text="Обработать коды",
-            command=self.process_codes,
-            state=tk.DISABLED
-        )
-        self.process_btn.pack(fill=tk.X, pady=5)
-
         # Фрейм для результатов
         result_frame = ttk.LabelFrame(self.root, text="Результаты", padding=10)
         result_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
@@ -76,16 +67,6 @@ class CodeProcessorApp:
             title="Выберите Excel файл с кодами",
             filetypes=[("Excel files", "*.xlsx *.xls"), ("All files", "*.*")]
         )
-
-        if self.file_path:
-            self.process_btn.config(state=tk.NORMAL)
-        else:
-            self.process_btn.config(state=tk.DISABLED)
-
-    def process_codes(self):
-        if not self.file_path:
-            messagebox.showwarning("Предупреждение", "Сначала выберите файл!")
-            return
 
         try:
             # Загрузка данных из Excel
@@ -111,7 +92,6 @@ class CodeProcessorApp:
 
         except Exception as e:
             messagebox.showerror("Ошибка", f"Произошла ошибка:\n{str(e)}")
-
     def build_tree(self, codes):
         tree_dict = defaultdict(dict)
 
