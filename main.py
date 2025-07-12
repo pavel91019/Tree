@@ -48,17 +48,33 @@ class CodeProcessorApp:
         )
         self.process_btn.grid(row=2, column=0, columnspan=2, pady=5)
 
+        # Кнопки управления деревом
+        control_frame = ttk.Frame(settings_frame)
+        control_frame.grid(row=3, column=0, columnspan=2, pady=5)
+
+        ttk.Button(
+            control_frame,
+            text="Развернуть все",
+            command=self.expand_all
+        ).pack(side=tk.LEFT, padx=2)
+
+        ttk.Button(
+            control_frame,
+            text="Свернуть все",
+            command=self.collapse_all
+        ).pack(side=tk.LEFT, padx=2)
+
         # Фрейм для результатов
         result_frame = ttk.LabelFrame(self.root, text="Результаты", padding=10)
         result_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
-        # Текстовое поле с прокруткой
-        self.result_text = tk.Text(result_frame, wrap=tk.WORD)
-        scrollbar = ttk.Scrollbar(result_frame, command=self.result_text.yview)
-        self.result_text.configure(yscrollcommand=scrollbar.set)
+        # Treeview с прокруткой
+        self.tree = ttk.Treeview(result_frame, show="tree")
+        scrollbar = ttk.Scrollbar(result_frame, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=scrollbar.set)
 
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        self.result_text.pack(fill=tk.BOTH, expand=True)
+        self.tree.pack(fill=tk.BOTH, expand=True)
 
     def select_file(self):
         self.file_path = filedialog.askopenfilename(
@@ -83,61 +99,63 @@ class CodeProcessorApp:
             # Собираем все коды из всех ячеек
             all_codes = []
             for cell in df[0]:
-                # Обрабатываем каждую ячейку - разбиваем по переносам строк
                 if pd.notna(cell):
                     codes_in_cell = str(cell).split('\n')
                     for code in codes_in_cell:
                         code = code.strip()
-                        if code:  # Игнорируем пустые строки
+                        if code:
                             all_codes.append(code)
 
-            # Обработка кодов
-            tree = self.build_tree(all_codes)
-
             # Очистка предыдущих результатов
-            self.result_text.delete(1.0, tk.END)
+            for item in self.tree.get_children():
+                self.tree.delete(item)
 
-            # Вывод результатов
-            self.print_tree_to_widget(tree)
+            # Построение дерева
+            self.build_tree(all_codes)
 
         except Exception as e:
             messagebox.showerror("Ошибка", f"Произошла ошибка:\n{str(e)}")
 
     def build_tree(self, codes):
-        tree = defaultdict(dict)
+        tree_dict = defaultdict(dict)
         max_level = self.max_level.get()
 
         for code in codes:
             parts = code.split('-')
-            current_level = tree
+            current_level = tree_dict
 
             for i in range(min(len(parts), max_level)):
-                part = parts[i].strip()  # Удаляем лишние пробелы
+                part = parts[i].strip()
                 if part not in current_level:
                     current_level[part] = defaultdict(dict)
                 current_level = current_level[part]
 
-        return tree
+        # Рекурсивное добавление в Treeview
+        self.add_tree_items("", tree_dict)
 
-    def print_tree_to_widget(self, node, level=0, prefix=""):
+    def add_tree_items(self, parent, node):
         for part, child in sorted(node.items()):
-            # Определяем отступы
-            indent = '    ' * level  # Используем 4 пробела для каждого уровня
+            item = self.tree.insert(parent, "end", text=part, open=False)
+            if child:  # Если есть дочерние элементы
+                self.add_tree_items(item, child)
 
-            # Формируем отображаемую часть
-            if level == 0:
-                display_part = part
-            else:
-                display_part = part.split('-')[-1] if '-' in part else part
+    def expand_all(self):
+        for item in self.tree.get_children():
+            self.expand_item_and_children(item)
 
-            # Добавляем в текстовое поле
-            self.result_text.insert(tk.END, f"{indent}{display_part} (ур {level + 1})\n")
+    def expand_item_and_children(self, item):
+        self.tree.item(item, open=True)
+        for child in self.tree.get_children(item):
+            self.expand_item_and_children(child)
 
-            # Рекурсивно обрабатываем дочерние элементы
-            self.print_tree_to_widget(child, level + 1, f"{prefix}-{part}" if prefix else part)
+    def collapse_all(self):
+        for item in self.tree.get_children():
+            self.collapse_item_and_children(item)
 
-        # Автоматическая прокрутка в начало
-        self.result_text.see(tk.END)
+    def collapse_item_and_children(self, item):
+        self.tree.item(item, open=False)
+        for child in self.tree.get_children(item):
+            self.collapse_item_and_children(child)
 
 
 if __name__ == "__main__":
